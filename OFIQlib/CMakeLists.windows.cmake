@@ -16,6 +16,13 @@ include_directories (
 	${include_modules}
 )
 
+if(OFIQ_USE_GPU)
+	add_compile_definitions(OFIQ_ORT_GPU_ENABLED=1)
+	set(ONNXRUNTIME_WIN_X64_DIR_NAME onnxruntime-win-x64-gpu-1.18.1)
+else()
+	set(ONNXRUNTIME_WIN_X64_DIR_NAME onnxruntime-win-x64-1.18.1)
+endif()
+
 if(USE_CONAN)
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build/conan")
 	list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build/conan")
@@ -30,9 +37,9 @@ if(USE_CONAN)
 	add_library(onnxruntime SHARED IMPORTED)
 	if( ARCHITECTURE STREQUAL "x64" )
 		set_target_properties(onnxruntime PROPERTIES
-		IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-win-x64-1.18.1/lib/onnxruntime.lib
-		IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-win-x64-1.18.1/lib/onnxruntime.dll
-		INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-win-x64-1.18.1/include
+		IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_WIN_X64_DIR_NAME}/lib/onnxruntime.lib
+		IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_WIN_X64_DIR_NAME}/lib/onnxruntime.dll
+		INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_WIN_X64_DIR_NAME}/include
 		)
 	else ()
 		set_target_properties(onnxruntime PROPERTIES
@@ -221,6 +228,17 @@ install(TARGETS OFIQSampleApp RUNTIME DESTINATION $<CONFIG>/bin)
 
 get_property(IMPORTED_LIB_LOCATION TARGET onnxruntime PROPERTY IMPORTED_LOCATION)
 install(FILES "${IMPORTED_LIB_LOCATION}" DESTINATION "$<CONFIG>/bin")
+
+if(OFIQ_USE_GPU)
+	get_filename_component(ONNX_LIB_DIR "${IMPORTED_LIB_LOCATION}" DIRECTORY)
+	foreach(provider_dll
+		onnxruntime_providers_shared.dll
+		onnxruntime_providers_cuda.dll
+		onnxruntime_providers_tensorrt.dll
+	)
+		install(FILES "${ONNX_LIB_DIR}/${provider_dll}" DESTINATION "$<CONFIG>/bin" OPTIONAL)
+	endforeach()
+endif()
 
 install(TARGETS ofiq_lib
         RUNTIME DESTINATION $<CONFIG>/bin

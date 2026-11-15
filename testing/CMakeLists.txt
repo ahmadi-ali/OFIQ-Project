@@ -62,6 +62,16 @@ endif(USE_CONAN)
 if(${OS} STREQUAL "windows")
         get_property(IMPORTED_LIB_LOCATION TARGET onnxruntime PROPERTY IMPORTED_LOCATION)
         install(FILES "${IMPORTED_LIB_LOCATION}" DESTINATION ${CMAKE_BINARY_DIR}/Testing/${CMAKE_BUILD_TYPE}/)
+        if(OFIQ_USE_GPU)
+                get_filename_component(ONNX_LIB_DIR "${IMPORTED_LIB_LOCATION}" DIRECTORY)
+                foreach(provider_dll
+                        onnxruntime_providers_shared.dll
+                        onnxruntime_providers_cuda.dll
+                        onnxruntime_providers_tensorrt.dll
+                )
+                        install(FILES "${ONNX_LIB_DIR}/${provider_dll}" DESTINATION ${CMAKE_BINARY_DIR}/Testing/${CMAKE_BUILD_TYPE}/ OPTIONAL)
+                endforeach()
+        endif()
 endif(${OS} STREQUAL "windows")
 
 include(GoogleTest)

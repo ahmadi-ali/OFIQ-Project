@@ -72,6 +72,21 @@ namespace OFIQ_LIB
         inline static constexpr const char* OrtRunParallelConfigKey = "params.threading.ort_run_parallel";
 
         /**
+         * @brief JAXN key for the ONNX Runtime execution provider.
+         */
+        inline static constexpr const char* OrtProviderConfigKey = "params.execution.provider";
+
+        /**
+         * @brief JAXN key for the ONNX Runtime GPU device ID.
+         */
+        inline static constexpr const char* OrtDeviceIdConfigKey = "params.execution.device_id";
+
+        /**
+         * @brief JAXN key for falling back to CPU execution when a GPU provider is unavailable.
+         */
+        inline static constexpr const char* OrtFallbackToCpuConfigKey = "params.execution.fallback_to_cpu";
+
+        /**
          * @brief Reads a configured thread limit from the JAXN configuration.
          * @param config Configuration instance.
          * @param key Top-level JAXN key to read.
@@ -110,6 +125,31 @@ namespace OFIQ_LIB
          * and <code>false</code> for sequential execution or if the key is not set.
          */
         static bool GetOrtRunParallel(const Configuration& config);
+
+        /**
+         * @brief Reads and validates the ONNX Runtime execution provider.
+         * @param config Configuration instance.
+         * @return Normalized lowercase provider string (default <code>"cpu"</code>).
+         * Supported values: <code>"cpu"</code>, <code>"auto"</code>, <code>"cuda"</code>,
+         * <code>"tensorrt"</code>, <code>"coreml"</code>, <code>"dml"</code>, <code>"rocm"</code>.
+         * @throws OFIQ_LIB::OFIQError if an unsupported provider is specified.
+         */
+        static std::string GetOrtExecutionProvider(const Configuration& config);
+
+        /**
+         * @brief Reads and validates the ONNX Runtime GPU device ID.
+         * @param config Configuration instance.
+         * @return Configured non-negative device ID (default <code>0</code>).
+         * @throws OFIQ_LIB::OFIQError if the configured value is not a non-negative integer.
+         */
+        static int GetOrtDeviceId(const Configuration& config);
+
+        /**
+         * @brief Reads whether ONNX Runtime should fall back to CPU if the GPU provider fails.
+         * @param config Configuration instance.
+         * @return <code>true</code> to fall back to CPU (default), or <code>false</code> to fail.
+         */
+        static bool GetOrtFallbackToCpu(const Configuration& config);
 
         /**
          * @brief Applies the configured OpenCV thread limit globally.

@@ -62,6 +62,14 @@
         // Must be set to true if inter_op_num_threads is > 0.
         "ort_run_parallel": false,
       },
+      "execution": {
+        // Execution provider: "cpu" (default), "auto", "cuda", "tensorrt", "coreml", "dml", "rocm"
+        "provider": "cpu",
+        // Target GPU device ID (0 = default primary GPU)
+        "device_id": 0,
+        // Fall back to CPU execution if the requested GPU provider is unavailable at runtime
+        "fallback_to_cpu": true
+      },
       "measures": {
         "BackgroundUniformity": {
           "Sigmoid" : {

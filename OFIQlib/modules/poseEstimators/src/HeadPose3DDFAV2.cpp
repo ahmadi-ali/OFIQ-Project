@@ -68,7 +68,7 @@ namespace OFIQ_LIB::modules::poseEstimators
                 std::istreambuf_iterator<char>());
 
             m_ortSession = std::make_unique<Ort::Session>(
-                m_ortenv,
+                OFIQ_LIB::GetSharedOrtEnv(),
                 modelData.data(),
                 modelData.size(),
                 OFIQ_LIB::CreateONNXSessionOptions(config));

@@ -74,11 +74,6 @@ namespace OFIQ_LIB::modules::poseEstimators
         static const std::string m_paramPoseEstimatorModel;
 
         /**
-         * @brief ONNXRuntime environment handle.
-         */
-        Ort::Env m_ortenv;
-
-        /**
          * @brief ONNXRuntime session handle.
          */
         std::unique_ptr<Ort::Session> m_ortSession;

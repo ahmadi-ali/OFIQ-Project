@@ -71,7 +71,7 @@ namespace OFIQ_LIB::modules::landmarks
             const OFIQ_LIB::Configuration& config)
         {
             m_ort_session = std::make_unique<Ort::Session>(
-                m_ortenv,
+                OFIQ_LIB::GetSharedOrtEnv(),
                 i_model_data.data(),
                 i_model_data.size(),
                 OFIQ_LIB::CreateONNXSessionOptions(config));
@@ -219,7 +219,6 @@ namespace OFIQ_LIB::modules::landmarks
             return std::vector<float>();
         }
 
-        Ort::Env m_ortenv;
         std::unique_ptr<Ort::Session> m_ort_session;
 
         int64_t m_expected_image_width = 0;

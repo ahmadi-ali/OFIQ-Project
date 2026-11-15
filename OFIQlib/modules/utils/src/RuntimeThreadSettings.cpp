@@ -28,6 +28,8 @@
 
 #include "OFIQError.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <opencv2/core/utility.hpp>
@@ -74,6 +76,56 @@ namespace OFIQ_LIB
         bool runParallel = false;
         config.GetBool(OrtRunParallelConfigKey, runParallel);
         return runParallel;
+    }
+
+    std::string RuntimeThreadSettings::GetOrtExecutionProvider(const Configuration& config)
+    {
+        std::string provider = "cpu";
+        if (!config.GetString(OrtProviderConfigKey, provider))
+            return "cpu";
+
+        std::transform(
+            provider.begin(),
+            provider.end(),
+            provider.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (provider != "cpu" && provider != "auto" && provider != "cuda" &&
+            provider != "tensorrt" && provider != "coreml" && provider != "dml" &&
+            provider != "rocm")
+        {
+            throw OFIQError(
+                OFIQ::ReturnCode::MissingConfigParamError,
+                std::string(OrtProviderConfigKey) +
+                    " must be one of: cpu, auto, cuda, tensorrt, coreml, dml, rocm");
+        }
+
+        return provider;
+    }
+
+    int RuntimeThreadSettings::GetOrtDeviceId(const Configuration& config)
+    {
+        double configuredValue = 0.0;
+        if (!config.GetNumber(OrtDeviceIdConfigKey, configuredValue))
+            return 0;
+
+        if (!std::isfinite(configuredValue) || configuredValue < 0.0 ||
+            std::trunc(configuredValue) != configuredValue ||
+            configuredValue > static_cast<double>(std::numeric_limits<int>::max()))
+        {
+            throw OFIQError(
+                OFIQ::ReturnCode::MissingConfigParamError,
+                std::string(OrtDeviceIdConfigKey) + " must be a non-negative integer");
+        }
+
+        return static_cast<int>(configuredValue);
+    }
+
+    bool RuntimeThreadSettings::GetOrtFallbackToCpu(const Configuration& config)
+    {
+        bool fallbackToCpu = true;
+        config.GetBool(OrtFallbackToCpuConfigKey, fallbackToCpu);
+        return fallbackToCpu;
     }
 
     void RuntimeThreadSettings::ApplyThreadLimit(const Configuration& config)

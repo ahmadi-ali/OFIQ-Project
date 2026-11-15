@@ -21,6 +21,15 @@ include_directories (
 	${include_modules}
 )
 
+if(OFIQ_USE_GPU)
+	add_compile_definitions(OFIQ_ORT_GPU_ENABLED=1)
+	set(ONNXRUNTIME_DIR_NAME onnxruntime-linux-x64-gpu-${OFIQ_ORT_GPU_VERSION})
+	set(ONNXRUNTIME_SO_VERSION ${OFIQ_ORT_GPU_VERSION})
+else()
+	set(ONNXRUNTIME_DIR_NAME onnxruntime-linux-x64-1.18.1)
+	set(ONNXRUNTIME_SO_VERSION 1.18.1)
+endif()
+
 if(USE_CONAN)
 	# Add packages from conan
 	find_package(OpenCV REQUIRED COMPONENTS core calib3d imgcodecs imgproc dnn ml)
@@ -30,9 +39,9 @@ if(USE_CONAN)
 
 	add_library(onnxruntime SHARED IMPORTED)
 	set_target_properties(onnxruntime PROPERTIES
-		IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-linux-x64-1.18.1/lib/libonnxruntime.so
-		IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-linux-x64-1.18.1/lib/libonnxruntime.so.1.18.1
-		INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/extern/onnxruntime-linux-x64-1.18.1/include
+		IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_DIR_NAME}/lib/libonnxruntime.so
+		IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_DIR_NAME}/lib/libonnxruntime.so.${ONNXRUNTIME_SO_VERSION}
+		INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/extern/${ONNXRUNTIME_DIR_NAME}/include
 	)
 else(USE_CONAN)
 	list(APPEND OFIQ_LINK_INCLUDE_LIST
@@ -198,6 +207,18 @@ install(TARGETS OFIQSampleApp RUNTIME DESTINATION $<CONFIG>/bin)
 get_property(IMPORTED_LIB_LOCATION TARGET onnxruntime PROPERTY IMPORTED_LOCATION)
 install(FILES "${IMPORTED_LIB_LOCATION}" DESTINATION "$<CONFIG>/bin")
 install(FILES "${IMPORTED_LIB_LOCATION}" DESTINATION "$<CONFIG>/lib")
+
+if(OFIQ_USE_GPU)
+	get_filename_component(ONNX_LIB_DIR "${IMPORTED_LIB_LOCATION}" DIRECTORY)
+	foreach(provider_lib
+		libonnxruntime_providers_shared.so
+		libonnxruntime_providers_cuda.so
+		libonnxruntime_providers_tensorrt.so
+	)
+		install(FILES "${ONNX_LIB_DIR}/${provider_lib}" DESTINATION "$<CONFIG>/bin" OPTIONAL)
+		install(FILES "${ONNX_LIB_DIR}/${provider_lib}" DESTINATION "$<CONFIG>/lib" OPTIONAL)
+	endforeach()
+endif()
 
 install(TARGETS ofiq_lib
         RUNTIME DESTINATION $<CONFIG>/bin

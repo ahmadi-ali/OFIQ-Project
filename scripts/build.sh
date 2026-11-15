@@ -9,6 +9,7 @@ build_python=OFF
 download=ON
 config=Release
 os=linux
+use_gpu=OFF
 useSonarWrapper=false
 sonarWrapper="${SONARQUBE_WRAPPER_PATH:-.sonar}/build-wrapper-linux-x86-64"
 
@@ -22,6 +23,8 @@ elif [ "$1" = "--no-download" ]; then
     download=OFF
 elif [ "$1" = "--debug" ]; then
     config=Debug
+elif [ "$1" = "--gpu" ]; then
+    use_gpu=ON
 elif [ "$1" = "--use-sonar-wrapper" ]; then
     useSonarWrapper=true
     echo "The following sonar wrapper will be used: $sonarWrapper"
@@ -110,11 +113,15 @@ else
     cd ../googletest
     cmake -S ./ -B build -DBUILD_GMOCK=OFF -DINSTALL_GTEST=OFF -DBUILD_SHARED_LIBS=ON || exit 1
     cmake --build build/googletest --config $config || exit 1
-    if [ "$os" = "linux" ]
+    if [ "$os" = "linux" ] || [ "$os" = "linux-arm64" ]
     then
         # build onnxruntime
         cd ../onnxruntime
-        sh ./build.sh --config $config --build_shared_lib --parallel --compile_no_warning_as_error --skip_submodule_sync --update --build || exit 1
+        ort_gpu_flag=""
+        if [ "$use_gpu" = "ON" ]; then
+            ort_gpu_flag="--use_cuda"
+        fi
+        sh ./build.sh --config $config --build_shared_lib --parallel --compile_no_warning_as_error --skip_submodule_sync --update --build $ort_gpu_flag || exit 1
         cd ..
     else # os is macos
         # build protobuf
@@ -130,7 +137,11 @@ else
         # build onnxruntime
         cd ../onnxruntime
         rm -rf ../protobuf-21.12
-        sh ./build.sh --config $config --path_to_protoc_exe ../protobuf/bin/protoc --build_shared_lib --parallel --compile_no_warning_as_error --skip_submodule_sync --update --build || exit 1
+        ort_gpu_flag=""
+        if [ "$use_gpu" = "ON" ]; then
+            ort_gpu_flag="--use_coreml"
+        fi
+        sh ./build.sh --config $config --path_to_protoc_exe ../protobuf/bin/protoc --build_shared_lib --parallel --compile_no_warning_as_error --skip_submodule_sync --update --build $ort_gpu_flag || exit 1
         cd ..
     fi
 fi
@@ -145,7 +156,7 @@ fi
 
 echo "Generating build files"
 cmake -S ./ -B $build_dir -DCMAKE_INSTALL_PREFIX=$install_dir -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DDOWNLOAD_ONNX=$download_onnx -DUSE_CONAN=$use_conan -DOS=$os -DCMAKE_BUILD_TYPE=$config -DDOWNLOAD_MODELS_AND_IMAGES=$download -DUSE_GCOV_CODECOVERAGE=$useSonarWrapper
+    -DDOWNLOAD_ONNX=$download_onnx -DUSE_CONAN=$use_conan -DOS=$os -DCMAKE_BUILD_TYPE=$config -DDOWNLOAD_MODELS_AND_IMAGES=$download -DUSE_GCOV_CODECOVERAGE=$useSonarWrapper -DOFIQ_USE_GPU=$use_gpu
 
 cmakeBuildCommand="cmake --build $build_dir --target install -j 8"
 

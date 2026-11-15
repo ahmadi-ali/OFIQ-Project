@@ -8,6 +8,7 @@ set vs_version="vc16"
 set use_conan=ON
 set download=ON
 set config=Release
+set use_gpu=OFF
 
 :loop 
 if "%1" == "" goto done
@@ -16,6 +17,7 @@ if /i "%1" == "--no-conan" set use_conan=OFF
 if /i "%1" == "--arch" set "architecture=%2"
 if /i "%1" == "--compiler" set "set_compiler=%2"
 if /i "%1" == "--debug" set config=Debug
+if /i "%1" == "--gpu" set use_gpu=ON
 shift
 goto loop
 :done
@@ -34,7 +36,11 @@ IF %architecture%==x86 (
   set set_architecture=-A Win32
 ) else if %architecture%==x64 (
   set "conan_set_arch="
-  set "onnxruntime_flags="
+  if /I "%use_gpu%"=="ON" (
+    set "onnxruntime_flags=--use_cuda"
+  ) else (
+    set "onnxruntime_flags="
+  )
   set set_architecture=-A %architecture%
 ) else (
   echo This architecture is not supported
@@ -111,7 +117,7 @@ if exist %build_dir% (
 
 echo Generating build files
 cmake -S ./ -G %generator% %set_architecture% -B %build_dir% -DCMAKE_INSTALL_PREFIX=%install_dir% -DDOWNLOAD_ONNX=%download_onnx% -DUSE_CONAN=%use_conan% ^
-  -DOS=windows -DCMAKE_BUILD_TYPE=%config% -DARCHITECTURE=%architecture% -DDOWNLOAD_MODELS_AND_IMAGES=%download% -DVS_VERSION=%vs_version% || goto end
+  -DOS=windows -DCMAKE_BUILD_TYPE=%config% -DARCHITECTURE=%architecture% -DDOWNLOAD_MODELS_AND_IMAGES=%download% -DVS_VERSION=%vs_version% -DOFIQ_USE_GPU=%use_gpu% || goto end
 
 echo Building %config%
 cmake --build %build_dir% --config %config% --target install -j 8 || goto end

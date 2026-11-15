@@ -98,9 +98,8 @@ void ONNXRuntimeEnv::init_session(
     int64_t i_imageHeight,
     const OFIQ_LIB::Configuration& config)
 {
-    m_ortenv = Ort::Env(ORT_LOGGING_LEVEL_ERROR);
     m_ortSession = std::make_unique<Ort::Session>(
-        m_ortenv,
+        OFIQ_LIB::GetSharedOrtEnv(),
         i_model_data.data(),
         i_model_data.size(),
         OFIQ_LIB::CreateONNXSessionOptions(config));

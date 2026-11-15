@@ -449,6 +449,126 @@ and run
  * <code>conformance_tests.sh --os linux-arm64</code> (Linux/ARMv8)
  * <code>conformance_tests.sh --os macos</code> (MacOS).
 
+# GPU Support (Optional)
+
+OFIQ can optionally build and run ONNX Runtime models using GPU Execution Providers (`cuda`, `tensorrt`, `coreml`, `dml`, `rocm`, or `auto`).
+
+## Building with GPU support
+
+Pass `--gpu` to the build scripts (or `-DOFIQ_USE_GPU=ON` directly to CMake):
+
+```
+cd /path/to/OFIQ_Project/scripts
+sh build.sh --gpu
+```
+
+On Windows:
+
+```
+cd C:\Path\To\OFIQ_Project\scripts
+build.cmd --gpu
+```
+
+### Linux (x86_64) with the CUDA provider
+
+The build downloads a pre-compiled GPU package of ONNX Runtime from its GitHub releases
+instead of the CPU package. Its release is the CMake cache variable `OFIQ_ORT_GPU_VERSION`
+(default `1.20.1`), and that release decides which CUDA libraries the provider loads at run time:
+
+<table>
+ <tr><td><b>ONNX Runtime release</b></td><td><b>GPU package</b></td><td><b>needs at run time</b></td></tr>
+ <tr><td>1.18.x</td><td><code>onnxruntime-linux-x64-gpu-1.18.x.tgz</code></td><td>CUDA 12 and cuDNN 8</td></tr>
+ <tr><td>1.19 to 1.23</td><td><code>onnxruntime-linux-x64-gpu-&lt;version&gt;.tgz</code></td><td>CUDA 12 and cuDNN 9</td></tr>
+ <tr><td>1.24 and later</td><td><code>onnxruntime-linux-x64-gpu-&lt;version&gt;.tgz</code> (CUDA 12) or <code>onnxruntime-linux-x64-gpu_cuda12-&lt;version&gt;.tgz</code> from 1.27 on; <code>onnxruntime-linux-x64-gpu_cuda13-&lt;version&gt;.tgz</code> (CUDA 13)</td><td>CUDA 12 and cuDNN 9, or CUDA 13 and cuDNN 9</td></tr>
+</table>
+
+`CMakeLists.txt` composes the package name as `onnxruntime-linux-x64-gpu-<version>.tgz`, so the
+variable selects a CUDA 12 build of release 1.18.1 to 1.26.x; a `gpu_cuda12` or `gpu_cuda13` package
+needs the file name in `CMakeLists.txt` and `OFIQlib/CMakeLists.ubuntu.cmake` changed as well.
+The CUDA provider (`libonnxruntime_providers_cuda.so`) is linked against the CUDA libraries by
+soname (for CUDA 12: `libcudart.so.12`, `libcublas.so.12`, `libcublasLt.so.12`, `libcufft.so.11`,
+`libcurand.so.10`, `libnvrtc.so.12` and `libcudnn.so.9`), so any CUDA 12.x toolkit satisfies a CUDA 12
+package, but a CUDA 13 toolkit alone does not. The libraries have to be found through `ldconfig` or
+`LD_LIBRARY_PATH` when OFIQ runs, not when it builds. A CUDA toolkit installation is one source; the
+`nvidia-*-cu12` wheels that `pip install torch` pulls in are another, in which case the `lib/` folder of
+each package under `site-packages/nvidia/` goes on `LD_LIBRARY_PATH`:
+
+```
+venv=/path/to/venv/lib/python3.12/site-packages/nvidia
+export LD_LIBRARY_PATH=$(ls -d $venv/*/lib | tr '\n' ':')$LD_LIBRARY_PATH
+```
+
+The build itself is the Ubuntu build above with `--gpu`, from a virtual environment that holds conan:
+
+```
+python3 -m venv /path/to/py_ofiq_env
+source /path/to/py_ofiq_env/bin/activate
+pip install conan==2.18.1
+cd /path/to/OFIQ_Project/scripts
+sh build.sh --gpu                                   # -DOFIQ_ORT_GPU_VERSION=<release> to cmake for another release
+```
+
+It takes about 11 minutes on a 4-core machine; prefix the last command with `nice -n 19` to leave the
+cores to other work. With conan the build cannot be told the ONNX Runtime release from the command line,
+so to change it edit the default of `OFIQ_ORT_GPU_VERSION` in `CMakeLists.txt` or run the cmake
+configure step from `build.sh` by hand with `-DOFIQ_ORT_GPU_VERSION=<release>`.
+
+The install step copies `libonnxruntime.so.<version>` but not the `libonnxruntime.so.1` link that
+its soname names, so the sample application and the Python binding fail with
+*"libonnxruntime.so.1: cannot open shared object file"* until the links exist:
+
+```
+cd /path/to/OFIQ_Project/install_x86_64_linux/Release
+for d in lib bin; do
+    ln -sf libonnxruntime.so.1.20.1 $d/libonnxruntime.so.1
+    ln -sf libonnxruntime.so.1.20.1 $d/libonnxruntime.so
+done
+```
+
+To select the provider, copy `data/ofiq_config.jaxn` to `data/ofiq_config_gpu.jaxn` and set
+`config.params.execution.provider` to `"cuda"` (see below); the measures are the same as the CPU
+build's within rounding, at about 5 times the throughput on an RTX 3090. Check it with the sample
+application:
+
+```
+cd /path/to/OFIQ_Project/install_x86_64_linux/Release/bin
+./OFIQSampleApp -c ../../../data/ofiq_config_gpu.jaxn -i ../../../data/tests/images/b-01-smile.png
+```
+
+### Python binding against the GPU build
+
+[python-ofiq](https://github.com/unicef/python-ofiq) (the `ofiq` module on PyPI, whose wheels bundle a
+CPU build) compiles against an existing installation when `OFIQ_ROOT` points at it. Build the wheel
+from its source once, then install it into any environment with `--no-deps` so pip does not replace it
+with the CPU wheel:
+
+```
+source /path/to/py_ofiq_env/bin/activate
+pip install build scikit-build-core pybind11 ninja numpy
+git clone https://github.com/unicef/python-ofiq /path/to/python-ofiq
+cd /path/to/python-ofiq
+export OFIQ_ROOT=/path/to/OFIQ_Project/install_x86_64_linux/Release
+python -m build --wheel --no-isolation --outdir /path/to/OFIQ_Project/dist
+pip install --no-deps /path/to/OFIQ_Project/dist/python_ofiq-*.whl
+```
+
+The module loads `libofiq_lib.so` and `libonnxruntime.so.1` from `OFIQ_ROOT/lib` by rpath, and the CUDA
+libraries through `LD_LIBRARY_PATH` as above, which the dynamic loader reads once when the Python process
+starts. `OFIQ(data_dir, config_file)` takes the `data/` folder and `ofiq_config_gpu.jaxn`.
+
+## Configuring GPU Execution Provider
+
+In `data/ofiq_config.jaxn`, configure `config.params.execution`:
+
+```json
+"execution": {
+  "provider": "auto",
+  "device_id": 0,
+  "fallback_to_cpu": true
+}
+```
+
+
 # Running the sample executable
 
 In this section, we describe how to run the sample application of OFIQ after

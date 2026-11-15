@@ -25,6 +25,10 @@
  */
 
 #include <ofiq_lib.h>
+#include "Configuration.h"
+#include "OFIQError.h"
+#include "ONNXSessionOptions.h"
+#include "RuntimeThreadSettings.h"
 #include "image_io.h"
 
 #include <gtest/gtest.h>
@@ -181,6 +185,102 @@ TEST(TestDataValidity, ConformanceTableValid)
         ASSERT_TRUE(fs::exists(fullImgPath))
             << "Can't read test image file: " << fullImgPath.string() << std::endl;
     }
+}
+
+namespace
+{
+    struct ScopedTempConfigFile
+    {
+        fs::path dir;
+        std::string filename;
+
+        explicit ScopedTempConfigFile(const std::string& content)
+        {
+            dir = fs::temp_directory_path();
+            filename = "ofiq_test_exec_config_" +
+                       std::to_string(
+                           std::chrono::steady_clock::now().time_since_epoch().count()) +
+                       ".jaxn";
+            std::ofstream ofs(dir / filename);
+            ofs << content;
+        }
+
+        ~ScopedTempConfigFile()
+        {
+            std::error_code ec;
+            fs::remove(dir / filename, ec);
+        }
+    };
+}
+
+TEST(TestExecutionProviderConfig, DefaultAndValidProviders)
+{
+    ScopedTempConfigFile defaultCfg(R"({"config": {"params": {}}})");
+    OFIQ_LIB::Configuration configDefault(defaultCfg.dir.string(), defaultCfg.filename);
+    EXPECT_EQ(OFIQ_LIB::RuntimeThreadSettings::GetOrtExecutionProvider(configDefault), "cpu");
+    EXPECT_EQ(OFIQ_LIB::RuntimeThreadSettings::GetOrtDeviceId(configDefault), 0);
+    EXPECT_TRUE(OFIQ_LIB::RuntimeThreadSettings::GetOrtFallbackToCpu(configDefault));
+    EXPECT_NO_THROW(OFIQ_LIB::CreateONNXSessionOptions(configDefault));
+
+    ScopedTempConfigFile cudaFallbackCfg(R"({
+        "config": {
+            "params": {
+                "execution": {
+                    "provider": "CUDA",
+                    "device_id": 0,
+                    "fallback_to_cpu": true
+                }
+            }
+        }
+    })");
+    OFIQ_LIB::Configuration configCuda(cudaFallbackCfg.dir.string(), cudaFallbackCfg.filename);
+    EXPECT_EQ(OFIQ_LIB::RuntimeThreadSettings::GetOrtExecutionProvider(configCuda), "cuda");
+    EXPECT_EQ(OFIQ_LIB::RuntimeThreadSettings::GetOrtDeviceId(configCuda), 0);
+    EXPECT_TRUE(OFIQ_LIB::RuntimeThreadSettings::GetOrtFallbackToCpu(configCuda));
+    EXPECT_NO_THROW(OFIQ_LIB::CreateONNXSessionOptions(configCuda));
+}
+
+TEST(TestExecutionProviderConfig, InvalidProviderAndDeviceId)
+{
+    ScopedTempConfigFile invalidProviderCfg(R"({
+        "config": {
+            "params": {
+                "execution": {
+                    "provider": "invalid_ep"
+                }
+            }
+        }
+    })");
+    OFIQ_LIB::Configuration configInvalidProvider(
+        invalidProviderCfg.dir.string(),
+        invalidProviderCfg.filename);
+    EXPECT_THROW(
+        OFIQ_LIB::RuntimeThreadSettings::GetOrtExecutionProvider(configInvalidProvider),
+        OFIQ_LIB::OFIQError);
+
+    ScopedTempConfigFile invalidDeviceCfg(R"({
+        "config": {
+            "params": {
+                "execution": {
+                    "provider": "cpu",
+                    "device_id": -1
+                }
+            }
+        }
+    })");
+    OFIQ_LIB::Configuration configInvalidDevice(
+        invalidDeviceCfg.dir.string(),
+        invalidDeviceCfg.filename);
+    EXPECT_THROW(
+        OFIQ_LIB::RuntimeThreadSettings::GetOrtDeviceId(configInvalidDevice),
+        OFIQ_LIB::OFIQError);
+}
+
+TEST(TestExecutionProviderConfig,SharedOrtEnvSingleton)
+{
+    Ort::Env& env1 = OFIQ_LIB::GetSharedOrtEnv();
+    Ort::Env& env2 = OFIQ_LIB::GetSharedOrtEnv();
+    EXPECT_EQ(&env1, &env2);
 }
 
 class ConformanceTest

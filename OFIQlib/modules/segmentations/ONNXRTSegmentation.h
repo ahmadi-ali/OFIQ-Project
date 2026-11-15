@@ -43,12 +43,6 @@ class ONNXRuntimeEnv
 private:
 
     /**
-     * @brief Handle to the ONNXRuntime environment variable.
-     * 
-     */
-    Ort::Env m_ortenv;
-
-    /**
      * @brief ONNXRuntime variable to setup the tensors used in ONNXRuntime.
      * 
      */

@@ -22,6 +22,10 @@ include_directories (
 	${include_modules}
 )
 
+if(OFIQ_USE_GPU)
+	add_compile_definitions(OFIQ_ORT_GPU_ENABLED=1)
+endif()
+
 if(USE_CONAN)
 	# Add packages from conan
 	find_package(OpenCV REQUIRED COMPONENTS core calib3d imgcodecs imgproc dnn ml)
